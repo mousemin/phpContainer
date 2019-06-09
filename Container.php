@@ -3,10 +3,20 @@
 namespace mouse\container;
 
 use ReflectionClass;
+use Psr\Container\ContainerInterface;
 
-class Container implements \Psr\Container\ContainerInterface
+class Container implements ContainerInterface
 {   
-    
+    protected static $instance = null;
+
+    public static function getInstance()
+    {
+        if (is_null(static::$instance)) {
+            static::$instance = new static;
+        }
+        return static::$instance;
+    }
+
     /**
      * 绑定的对象
      * 数据格式 $key => $class

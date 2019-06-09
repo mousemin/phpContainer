@@ -1,20 +1,25 @@
 {
     "name": "mouse/container",
     "description": "mouse container",
+    "keywords": [ "container", "psr-11"],
     "authors": [
         {
             "name": "mouse",
-            "email": "2395360675@qq.com"
+            "email": "2395360675@qq.com",
+            "homepage": "https://blog.zhuyeqingbook.cn"
         }
     ],
     "license": "MIT",
     "require": {
-        "php": ">=5.6.0",
+        "php": ">=7.0",
         "psr/container": "^1.0"
     },
     "autoload": {
         "psr-4": {
-            "mouse\\": "./src/"
-        }
+            "mouse\\container": ""
+        },
+        "files": [
+            "helpers.php"
+        ]
     }
 }
