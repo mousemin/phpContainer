@@ -16,7 +16,7 @@
     },
     "autoload": {
         "psr-4": {
-            "mouse\\container": ""
+            "mouse\\container\\": ""
         },
         "files": [
             "helpers.php"
