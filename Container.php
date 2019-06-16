@@ -8,6 +8,13 @@ use ReflectionParameter;
 use mouse\support\hashmap\Arr;
 use Psr\Container\ContainerInterface;
 
+/**
+ * Container Object
+ * @package mouse\container
+ * @author mouse <mouseZJF@gmail.com>
+ * @todo 存储对象不是php的数组时 写|读问题
+ */
+
 class Container implements ContainerInterface
 {   
     /**
@@ -75,7 +82,7 @@ class Container implements ContainerInterface
      */
     public function __construct()
     {
-        $this->instances = new Arr();
+        $this->instances = [];
         $this->tags = new Arr();
         $this->alias = new Arr();
         $this->pend = new Arr();
@@ -115,6 +122,54 @@ class Container implements ContainerInterface
     {
         return !is_null($this->get($id));
     }
+
+    /**
+     * 注入一个对象进入容器池
+     *
+     * @param string $id
+     * @param string $className
+     * @param boolean $generate 是否立即生成
+     * @param boolean $force 是否覆盖
+     * @return bool
+     * @throws ContainerException
+     * @throws NotFoundException
+     */
+    public function set(string $id, string $className, bool $generate = false, bool $force = false)
+    {
+        if (!$force) {
+            // 判定是否存在
+            if (isset($this->alias[$id]) || isset($this->instances[$className]) || isset($this->pend[$className])) {
+                throw new ContainerException("Container presence key:{$key} class:{$class} Object");
+            }
+        }
+        // 判定对象是否可生成
+        if (!$this->isInstantiable($class)) {
+            throw new ContainerException("[Container] class:{$class} is not instantaable");
+        }
+        $this->pend[$class] = [
+            'alias' => $key,
+            'class' => $class,
+        ];
+        // 存储
+        if ($generate) {
+            // 直接生成
+            
+        }
+        return true;
+    }
+
+    /**
+     * 判断对象是否可生成
+     *
+     * @param string $class
+     * @return boolean
+     */
+    public function isInstantiable(string $class)
+    {
+        $reflect = new ReflectionClass($class);
+        return $reflect->isInstantiable();
+    }
+
     /**
      * 将对象存入容器池
      *
@@ -131,6 +186,10 @@ class Container implements ContainerInterface
                 throw new ContainerException("container presence key:{$key} class:{$class} Object");
             }
         } 
+        // 清除懒生成对象序列中其值
+        if (isset($this->pend[$class])) {
+            unset($this->pend[$class]);
+        }
         if (!empty($key)) {
             $this->alias[$key] = $class;
         }
@@ -172,6 +231,20 @@ class Container implements ContainerInterface
         // 其他形式获取参数
         $paramName = $param->getName();
         // @todo 通过param获取上下文
+    }
+
+    /**
+     * 生成对象
+     *
+     * @param string $class
+     * @return mixed
+     */
+    protected function make($class)
+    {
+        if (isset($this->pend[$class])) {
+            // 属于懒生成对象 
+            $pend = $this->pend[$class];
+        }
     }
 
     /**
