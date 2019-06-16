@@ -3,12 +3,25 @@
 namespace mouse\container;
 
 use ReflectionClass;
+use ReflectionMethod;
+use ReflectionParameter;
+use mouse\support\hashmap\Arr;
 use Psr\Container\ContainerInterface;
 
 class Container implements ContainerInterface
 {   
+    /**
+     * current Container
+     *
+     * @var Object
+     */
     protected static $instance = null;
 
+    /**
+     * Get bind Container
+     *
+     * @return Container
+     */
     public static function getInstance()
     {
         if (is_null(static::$instance)) {
@@ -18,156 +31,173 @@ class Container implements ContainerInterface
     }
 
     /**
-     * 绑定的对象
-     * 数据格式 $key => $class
+     * Set Bind Container
+     *
+     * @param ContainerInterface $container
+     * @return ContainerInterface
+     */
+    public static function setInstance(ContainerInterface $container)
+    {
+        static::$instance = $container;
+        return static::$instance;
+    }
+
+    /**
+     * 绑定在容器内的对象
      *
      * @var array
      */
-    protected $bindClass = [];
+    protected $instances = null;
 
     /**
-     * 完整类名绑定key
-     * 数据格式 $class => $object
+     * 对象tags
      *
      * @var array
      */
-    protected $bindObject = [];
+    protected $tag = null;
 
     /**
-     * 实例化Container
+     * 对象别名
+     *
+     * @var array
+     */
+    protected $alias = null;
+
+    /**
+     * 待生成对象的绑定
+     *
+     * @var array
+     */
+    protected $pend = null;
+    
+    /**
+     * 构造函数
      */
     public function __construct()
     {
-        $class = get_class($this);
-        $this->bindObject[$class] = $this;
-        $this->bindClass['container'] = $class;
+        $this->instances = new Arr();
+        $this->tags = new Arr();
+        $this->alias = new Arr();
+        $this->pend = new Arr();
     }
-
+    
     /**
-     * 获取别名为key的对象
+     * 获取id的Object
      *
-     * @param string $key
-     * @return object|null
-     */
-    public function get($key)
-    {
-        if(!$this->has($key)) {
-            return null;
-        }
-        $class = $this->bindClass[$key];
-        return $this->generate($class);
-    }
-
-    /**
-     * 判断是否存在key
-     *
-     * @param string $key
-     * @return boolean
-     */
-    public function has($key)
-    {
-        return isset($this->bindClass[$key]);
-    }
-
-    /**
-     * 设置对象
-     *
-     * @param string|array $key
-     * @param string $class
-     * @param array $argv 实例化的参数
-     * @return void
-     */
-    public function set($key, $class = null, $argv = [])
-    {   
-        if(is_string($key) && !empty($class)) {
-            $key = [ $key => [$class, $argv]];
-        }
-        if(is_array($key)) {
-            foreach($key as $k => $val) {
-                if(is_array($val) && count($val) == 2) {
-                    $class = $val[0];
-                    $param = $val[1];
-                } else {
-                    $class = $val;
-                    $param = [];
-                }
-                $class = ltrim($class, "\\");
-                $this->bindClass[$k] = $class;
-                $this->generate($class, $param);
-            }
-        }
-    }
-
-    /**
-     * 生成Object
-     *
-     * @param string $class
-     * @param array $param 额外参数
-     * @param boolean $type 是否重新生成
+     * @param string $id
      * @return Object
      */
-    public function generate($class, $param = [], $type = false)
+    public function get(string $id)
     {
-        $class = ltrim($class, '\\');
-        if(!isset($this->bindObject[$class]) || $type) {
-            $this->bindObject[$class] = $this->make($class, $param);
+        // 判定是否存在别名
+        if (isset($this->alias[$id])) {
+            $id = $this->alias[$id];
         }
-        return $this->bindObject[$class];
+        // 判定对象池中是否存在
+        if (isset($this->instances[$id])) {
+            return $this->instances[$id];
+        }
+        // 判定待生成的对象中是否存在
+        if (isset($this->pend[$id])) {
+            // 生成对象
+            
+        }
+        return null;
     }
 
     /**
-     * 依赖注入生成对象
+     * 判断Id是否存在
      *
-     * @param string $class
-     * @param array $arguments 额外参数
-     * @return mixed
+     * @param string $id
+     * @return boolean
      */
-    protected function make($class, $arguments = [])
+    public function has(string $id)
+    {
+        return !is_null($this->get($id));
+    }
+    /**
+     * 将对象存入容器池
+     *
+     * @param Object $instance
+     * @param string $key
+     * @param bool $force
+     * @return void
+     */
+    public function setInstances(Object $instance, string $key = '', bool $force = false)
+    {
+        $class = get_class($instance);
+        if (!$force) {
+            if ( (!empty($key) && isset($this->alias[$key])) || isset($this->instances[$class]) || isset($this->pend[$key]) ) {
+                throw new ContainerException("container presence key:{$key} class:{$class} Object");
+            }
+        } 
+        if (!empty($key)) {
+            $this->alias[$key] = $class;
+        }
+        $this->instances[$class] = $instance;
+    }
+
+    /**
+     * 获取方法的参数
+     *
+     * @param ReflectionMethod $method
+     * @return array
+     */
+    protected function getParams(ReflectionMethod $method)
+    {
+        $params = [];
+        $reflectionParams = $method->getParams();
+        foreach($reflectionParams as $param) {
+            $params[] = $this->getParam($param);
+        }
+        return $params;
+    }
+
+    /**
+     * 获取依赖注入参数
+     *
+     * @param ReflectionParameter $param
+     * @return void
+     */
+    protected function getParam(ReflectionParameter $param)
+    {
+        if ($cls = $param->getClass()) {
+            $className = $cls->getName();
+            // 1. 从对象池中获取
+            if (isset($this->instances[$className])) {
+                return $this->instances($className);
+            }
+            return $this->generate($className);
+        }
+        // 其他形式获取参数
+        $paramName = $param->getName();
+        // @todo 通过param获取上下文
+    }
+
+    /**
+     * 根据参数生成一个对象
+     *
+     * @param string $class 类名
+     * @return Object
+     * @throws NotFoundException class is not found
+     * @throws ContainerException
+     */
+    protected function generate($class)
     {
         if(!class_exists($class)) {
-            throw new NotFoundException("类{$class}不存在");
+            throw new NotFoundException("class:{$class} is not found");
         }
         $reflect = new ReflectionClass($class);
         // 依赖注入的参数
         $paramArr = [];
-        if($reflect->isInstantiable()) {
-            // 对象能实例化
-            $construct = $reflect->getConstructor();
-            // 构造函数没写
-            if(is_null($construct)) {
-                return $reflect->newInstanceArgs();
-            }
-            if(!$construct->isPublic()) {
-                throw new ContainerException("类{$class}无法实例化");
-            }
-        } elseif($reflect->hasMethod('getInstance')) {
-            // 单例
-            $construct = $reflect->getMethod('getInstance');
-            if(!$construct->isStatic()) {
-                throw new ContainerException("类{$class}无法实例化");
-            }
-        } else { 
-            throw new ContainerException("类{$class}无法实例化");
+        // 对象是否能实例化
+        if(!$reflect->isInstantiable()) {
+            throw new ContainerException("class:{$class} is not Instantiable");
         }
-        // 获取构造函数的参数
-        $param = $construct->getParameters();
-        if(count($param) > 0) {
-            foreach($param as $key => $val) {
-                // 如果是类 则注入
-                if($cls = $val->getClass()) {
-                    $className = $cls->getName();
-                    $paramArr[] = $this->generate($className);
-                }
-            }
+        if(is_null($construct = $reflect->getConstructor())) {
+            return $reflect->newInstanceArgs();
         }
-        if(false == empty($arguments)) {
-            $paramArr = array_merge_recursive($paramArr, $arguments);
-        }
-        if($reflect->isInstantiable()) {
-            return $reflect->newInstanceArgs($paramArr);
-            // return new $class(...$paramArr);
-        } else {
-            return $class::getInstance(...$paramArr);
-        }
+        $parms = $this->getParams($construct);
+        return $reflect->newInstanceArgs($params);
     }
 }

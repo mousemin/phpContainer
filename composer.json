@@ -1,6 +1,6 @@
 {
     "name": "mouse/container",
-    "description": "mouse container",
+    "description": "PHP 依赖注入容器",
     "keywords": [ "container", "psr-11"],
     "authors": [
         {
@@ -12,7 +12,8 @@
     "license": "MIT",
     "require": {
         "php": ">=7.0",
-        "psr/container": "^1.0"
+        "psr/container": "^1.0",
+        "mouse/support": "*"
     },
     "autoload": {
         "psr-4": {
